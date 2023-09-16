@@ -1,3 +1,6 @@
+DROP SCHEMA IF EXISTS TestCloudWalk;
+CREATE SCHEMA TestCloudWalk;
+
 USE TestCloudWalk;
 
 DROP TABLE IF EXISTS checkout1;
