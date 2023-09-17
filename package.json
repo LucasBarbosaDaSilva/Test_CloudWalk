@@ -9,10 +9,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "csv-parser": "^3.0.0",
     "docker-compose": "^0.24.2",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rescue": "^1.1.30",
-    "mysql": "^2.18.1"
+    "mysql": "^2.18.1",
+    "mysql-import": "^5.0.26",
+    "mysql2": "^3.6.1"
   },
   "devDependencies": {
     "nodemon": "^2.0.15"
