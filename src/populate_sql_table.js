@@ -37,7 +37,7 @@ importer
       // Leitura do arquivo CSV
       const csvData = fs.readFileSync(csvFilePath, "utf8");
 
-      // Separe as linhas do arquivo CSV
+      // Separe as linhas do arquivo CSV+
       const csvRows = csvData.split("\n");
 
       // Processamento das linhas do CSV e inserção na tabela

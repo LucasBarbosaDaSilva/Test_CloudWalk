@@ -1,12 +1,13 @@
 const express = require("express");
 const mysql = require("mysql2");
+const csvtojson = require("csvtojson");
 
 const app = express();
 app.use(express.json());
 
 const HTTP_OK_STATUS = 200;
 const HTTP_CREATED_STATUS = 201;
-const PORT = process.env.PORT || "3001";
+const PORT = process.env.PORT || "3005";
 
 const dbConfig = {
   user: "root",
@@ -18,16 +19,16 @@ const dbConfig = {
 
 // Crie uma instância de importação MySQL
 const connection = mysql.createConnection(dbConfig);
-const percentDifference =
-  Math.abs((avgTransactions - avgErrors) / avgTransactions) * 100;
+// const percentDifference =
+//   Math.abs((avgTransactions - avgErrors) / avgTransactions) * 100;
 
-app.get("/", (_request, response) => {
-  response.status(HTTP_OK_STATUS).send();
-});
+// app.get("/", (_request, response) => {
+//   response.status(HTTP_OK_STATUS).send();
+// });
 
-app.get("/dados", (request, response) => {
+app.get("/dados", (_request, response) => {
   // Consulta SQL para selecionar todos os dados da tabela
-  const selectAllQuery = "SELECT * FROM tabela_csv_1";
+  const selectAllQuery = "SELECT status, f0_ FROM tabela_csv_1";
 
   // Execute a consulta SQL
   connection.query(selectAllQuery, (error, results) => {
@@ -38,11 +39,22 @@ app.get("/dados", (request, response) => {
         .json({ message: "Erro interno do servidor." });
     }
 
-    // Retorne os resultados como resposta
-    return response.status(HTTP_OK_STATUS).json(results);
+    // Converte os resultados CSV em JSON
+    csvtojson()
+      .fromString(results)
+      .then((jsonArray) => {
+        // Define o cabeçalho Content-Type e retorna os resultados como JSON
+        response.setHeader("Content-Type", "application/json");
+        return response.status(HTTP_OK_STATUS).json(jsonArray);
+      })
+      .catch((csvError) => {
+        console.error("Erro ao converter CSV para JSON:", csvError);
+        return response
+          .status(500)
+          .json({ message: "Erro interno do servidor." });
+      });
   });
 });
-
 app.post("/adicionar-dados", (request, response) => {
   const { time, status, f0_ } = request.body;
 
@@ -65,106 +77,70 @@ app.post("/adicionar-dados", (request, response) => {
         .json({ message: "Erro interno do servidor." });
     }
 
-    // Consulta SQL para calcular a média de transações por minuto
-    const avgTransactionsQuery =
-      "SELECT AVG(f0_) AS avgTransactions FROM tabela_csv_1";
+    // Consultas SQL para calcular as médias
+    const avgQuery =
+      "SELECT " +
+      "'approved' AS status, AVG(f0_) AS media_approved " +
+      "FROM tabela_csv_1 WHERE status = 'approved' " +
+      "UNION ALL " +
+      "SELECT " +
+      "'denied' AS status, AVG(f0_) AS media_denied " +
+      "FROM tabela_csv_1 WHERE status = 'denied' " +
+      "UNION ALL " +
+      "SELECT " +
+      "'refunded' AS status, AVG(f0_) AS media_refunded " +
+      "FROM tabela_csv_1 WHERE status = 'refunded' " +
+      "UNION ALL " +
+      "SELECT " +
+      "'failed' AS status, AVG(f0_) AS media_failed " +
+      "FROM tabela_csv_1 WHERE status = 'failed' ";
 
-    // Consultas SQL para calcular a média de transações com cada status
-    const avgFailedQuery =
-      "SELECT AVG(f0_) AS avgFailed FROM tabela_csv_1 WHERE status = 'failed'";
-    const avgDeniedQuery =
-      "SELECT AVG(f0_) AS avgDenied FROM tabela_csv_1 WHERE status = 'denied'";
-    const avgReversedQuery =
-      "SELECT AVG(f0_) AS avgReversed FROM tabela_csv_1 WHERE status = 'reversed'";
-
-    // Execute as consultas SQL e obtenha as médias
-    connection.query(avgTransactionsQuery, (error, resultsTransactions) => {
+    // Execute a consulta SQL para calcular as médias
+    connection.query(avgQuery, (error, resultsAvg) => {
       if (error) {
-        console.error(
-          "Erro ao calcular a média de transações por minuto:",
-          error
-        );
+        console.error("Erro ao calcular as médias:", error);
         return response
           .status(500)
           .json({ message: "Erro interno do servidor." });
       }
 
-      connection.query(avgFailedQuery, (error, resultsFailed) => {
-        if (error) {
-          console.error(
-            "Erro ao calcular a média de transações 'failed':",
-            error
-          );
-          return response
-            .status(500)
-            .json({ message: "Erro interno do servidor." });
-        }
+      // Obtenha as médias calculadas
+      const mediaApproved = resultsAvg.find(
+        (result) => result.status === "approved"
+      ).media_approved;
+      const mediaDenied = resultsAvg.find(
+        (result) => result.status === "denied"
+      ).media_denied;
+      const mediaRefunded = resultsAvg.find(
+        (result) => result.status === "refunded"
+      ).media_refunded;
+      const mediaFailed = resultsAvg.find(
+        (result) => result.status === "failed"
+      ).media_failed;
 
-        connection.query(avgDeniedQuery, (error, resultsDenied) => {
-          if (error) {
-            console.error(
-              "Erro ao calcular a média de transações 'denied':",
-              error
-            );
-            return response
-              .status(500)
-              .json({ message: "Erro interno do servidor." });
-          }
+      // Definir uma variável de anomalia com base nas condições
+      let anomalia = "";
 
-          connection.query(avgReversedQuery, (error, resultsReversed) => {
-            if (error) {
-              console.error(
-                "Erro ao calcular a média de transações 'reversed':",
-                error
-              );
-              return response
-                .status(500)
-                .json({ message: "Erro interno do servidor." });
-            }
+      if (mediaDenied > 15) {
+        anomalia = "denied";
+      } else if (mediaFailed > 3) {
+        anomalia = "failed";
+      } else if (mediaRefunded > 3) {
+        anomalia = "refunded";
+      } else if (mediaApproved < 80) {
+        anomalia = "approved";
+      }
 
-            // Obtenha as médias calculadas
-            const avgTransactions = resultsTransactions[0].avgTransactions;
-            const avgFailed = resultsFailed[0].avgFailed;
-            const avgDenied = resultsDenied[0].avgDenied;
-            const avgReversed = resultsReversed[0].avgReversed;
-
-            // Calcular as diferenças percentuais individualmente para cada status
-            const percentDifferenceFailed =
-              Math.abs((avgTransactions - avgFailed) / avgTransactions) * 100;
-            const percentDifferenceDenied =
-              Math.abs((avgTransactions - avgDenied) / avgTransactions) * 100;
-            const percentDifferenceReversed =
-              Math.abs((avgTransactions - avgReversed) / avgTransactions) * 100;
-
-            // Verificar se algum dos status está acima do normal (80% ou mais de diferença)
-            if (percentDifferenceFailed >= 97) {
-              // Disparar o alarme para "failed"
-              window.alert(
-                "Alarme disparado para 'failed' devido à diferença percentual alta."
-              );
-            }
-
-            if (percentDifferenceDenied >= 97) {
-              // Disparar o alarme para "denied"
-              window.alert(
-                "Alarme disparado para 'denied' devido à diferença percentual alta."
-              );
-            }
-
-            if (percentDifferenceReversed >= 97) {
-              // Disparar o alarme para "reversed"
-              window.alert(
-                "Alarme disparado para 'reversed' devido à diferença percentual alta."
-              );
-            }
-
-            window.alert("Dados inseridos com sucesso!");
-            return response
-              .status(HTTP_CREATED_STATUS)
-              .json({ message: "Dados inseridos com sucesso." });
-          });
-        });
-      });
+      // Retorne a anomalia como resposta ou faça qualquer outra ação necessária
+      if (anomalia !== "") {
+        return response
+          .status(HTTP_CREATED_STATUS)
+          .json({ message: `Anomalia detectada para '${anomalia}'.` });
+      } else {
+        return response
+          .status(HTTP_CREATED_STATUS)
+          .json({ message: "Dados inseridos com sucesso." });
+      }
     });
   });
 });
