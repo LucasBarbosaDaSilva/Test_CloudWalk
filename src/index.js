@@ -14,23 +14,14 @@ const dbConfig = {
   password: "password",
   host: "localhost",
   port: "3306",
-  database: "TestCloudWalk", // Substitua pelo nome do seu banco de dados
+  database: "TestCloudWalk",
 };
 
-// Crie uma instância de importação MySQL
 const connection = mysql.createConnection(dbConfig);
-// const percentDifference =
-//   Math.abs((avgTransactions - avgErrors) / avgTransactions) * 100;
-
-// app.get("/", (_request, response) => {
-//   response.status(HTTP_OK_STATUS).send();
-// });
 
 app.get("/dados", (_request, response) => {
-  // Consulta SQL para selecionar todos os dados da tabela
   const selectAllQuery = "SELECT status, f0_ FROM tabela_csv_1";
 
-  // Execute a consulta SQL
   connection.query(selectAllQuery, (error, results) => {
     if (error) {
       console.error("Erro ao recuperar dados:", error);
@@ -39,11 +30,9 @@ app.get("/dados", (_request, response) => {
         .json({ message: "Erro interno do servidor." });
     }
 
-    // Converte os resultados CSV em JSON
     csvtojson()
       .fromString(results)
       .then((jsonArray) => {
-        // Define o cabeçalho Content-Type e retorna os resultados como JSON
         response.setHeader("Content-Type", "application/json");
         return response.status(HTTP_OK_STATUS).json(jsonArray);
       })
@@ -68,7 +57,6 @@ app.post("/adicionar-dados", (request, response) => {
     "INSERT INTO tabela_csv_1 (time, status, f0_) VALUES (?, ?, ?)";
   const values = [time, status, f0_];
 
-  // Execute a inserção no banco de dados
   connection.query(insertQuery, values, (error, results) => {
     if (error) {
       console.error("Erro ao inserir dados:", error);
@@ -77,7 +65,6 @@ app.post("/adicionar-dados", (request, response) => {
         .json({ message: "Erro interno do servidor." });
     }
 
-    // Consultas SQL para calcular as médias
     const avgQuery =
       "SELECT " +
       "'approved' AS status, AVG(f0_) AS media_approved " +
@@ -95,7 +82,6 @@ app.post("/adicionar-dados", (request, response) => {
       "'failed' AS status, AVG(f0_) AS media_failed " +
       "FROM tabela_csv_1 WHERE status = 'failed' ";
 
-    // Execute a consulta SQL para calcular as médias
     connection.query(avgQuery, (error, resultsAvg) => {
       if (error) {
         console.error("Erro ao calcular as médias:", error);
@@ -104,7 +90,6 @@ app.post("/adicionar-dados", (request, response) => {
           .json({ message: "Erro interno do servidor." });
       }
 
-      // Obtenha as médias calculadas
       const mediaApproved = resultsAvg.find(
         (result) => result.status === "approved"
       ).media_approved;
@@ -118,7 +103,6 @@ app.post("/adicionar-dados", (request, response) => {
         (result) => result.status === "failed"
       ).media_failed;
 
-      // Definir uma variável de anomalia com base nas condições
       let anomalia = "";
 
       if (mediaDenied > 15) {
@@ -131,7 +115,6 @@ app.post("/adicionar-dados", (request, response) => {
         anomalia = "approved";
       }
 
-      // Retorne a anomalia como resposta ou faça qualquer outra ação necessária
       if (anomalia !== "") {
         return response
           .status(HTTP_CREATED_STATUS)
